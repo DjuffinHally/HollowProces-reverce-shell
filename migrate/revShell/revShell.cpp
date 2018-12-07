@@ -221,7 +221,35 @@ bool ProcessReplacement(char *source_pe, char *target_exe) {
 		pPEB,
 		sizeof(PEB),
 		nullptr);
+	
+	// Comment if necessary. If the code is used in other project it can crash without this hook
+	// Hook remote process for correct start 
+	auto dwProcessParametersAddress = pPEB->ProcessParameters;		// get pointer to remote ProcessParameters 
+	auto pProcessParameters = new _RTL_USER_PROCESS_PARAMETERS();	// create new _RTL_USER_PROCESS_PARAMETERS object
+	if (!ReadProcessMemory(pi.hProcess,								// read remote ParametersAddress
+		static_cast<LPCVOID>(dwProcessParametersAddress),
+		pProcessParameters,
+		sizeof(_RTL_USER_PROCESS_PARAMETERS),
+		nullptr)) {
+		puts("[-] failed to load remote ProcessParameters");
+		return FALSE;
+	}
 
+	pProcessParameters->Reserved2[0] = 0;		// set ConsoleHandler (field Reserved2[0] in _RTL_USER_PROCESS_PARAMETERS object structure) to zero
+												// otherwise get error 0xc0000142 and unload of dll's
+
+	// Write changed structure to remote process
+	BOOL wp = WriteProcessMemory(pi.hProcess,				//hProcess                  the handle to the remote process
+		static_cast<LPVOID>(dwProcessParametersAddress),	//lpBaseAddress             The address to start writing to
+		pProcessParameters,									//lpBuffer                  the buffer to write to the process
+		sizeof(_RTL_USER_PROCESS_PARAMETERS),				//nSize                     number of bytes to write
+		&ByteOfWriten);										//lpNumberOfBytesWritten    (unused) int pointer to write the return value to
+	if (wp == NULL) {
+		puts("[-] failed to write new headers to remote process memory");
+		return FALSE;
+	}
+	// Hook finished
+	
 	// remote image size calculation
 	auto BUFFER_SIZE = sizeof IMAGE_DOS_HEADER + sizeof IMAGE_NT_HEADERS64 + (sizeof IMAGE_SECTION_HEADER) * 100;
 
